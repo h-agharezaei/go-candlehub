@@ -33,7 +33,9 @@ ehthumbs.db
 Thumbs.db
 
 # Application specific
-collector
+# Binary files (not source directories)
+/collector
+/candlehub
 *.log
 
 # Environment variables

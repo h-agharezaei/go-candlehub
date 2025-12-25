@@ -1,49 +1,54 @@
 package scheduler
 
 import (
-    "log"
-    "time"
+	"context"
+	"log"
+	"time"
 
-    "candlehub/internal/adapters"
-    "candlehub/internal/aggregator"
+	"candlehub/internal/adapters"
+	"candlehub/internal/aggregator"
 )
 
 type Scheduler struct {
-    adapter adapters.MarketAdapter
+	adapter adapters.MarketAdapter
 }
 
 func NewScheduler(adapter adapters.MarketAdapter) *Scheduler {
-    return &Scheduler{adapter: adapter}
+	return &Scheduler{adapter: adapter}
 }
 
-func (s *Scheduler) Start() {
-    ticker := time.NewTicker(1 * time.Minute)
-    defer ticker.Stop()
+func (s *Scheduler) Start(ctx context.Context) {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
 
-    lastFetch := time.Now().Add(-30 * time.Minute)
+	lastFetch := time.Now().Add(-30 * time.Minute)
 
-    builder15m := aggregator.NewBuilder(s.adapter.Asset(), 15*time.Minute)
-    builder1h := aggregator.NewBuilder(s.adapter.Asset(), 1*time.Hour)
+	builder15m := aggregator.NewBuilder(s.adapter.Asset(), 15*time.Minute)
+	builder1h := aggregator.NewBuilder(s.adapter.Asset(), 1*time.Hour)
 
-    for {
-        <-ticker.C
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("⏹️ Scheduler received shutdown signal")
+			return
+		case <-ticker.C:
+			candles, err := s.adapter.FetchMinuteCandles(lastFetch)
+			if err != nil {
+				log.Println("fetch error:", err)
+				continue
+			}
 
-        candles, err := s.adapter.FetchMinuteCandles(lastFetch)
-        if err != nil {
-            log.Println("fetch error:", err)
-            continue
-        }
+			if len(candles) == 0 {
+				continue
+			}
 
-        if len(candles) == 0 {
-            continue
-        }
+			lastFetch = candles[len(candles)-1].Time
 
-        lastFetch = candles[len(candles)-1].Time
+			c15 := builder15m.Build(candles)
+			c1h := builder1h.Build(candles)
 
-        c15 := builder15m.Build(candles)
-        c1h := builder1h.Build(candles)
-
-        log.Printf("[%s] 15m candles: %d | 1h candles: %d\n",
-            s.adapter.Asset(), len(c15), len(c1h))
-    }
+			log.Printf("[%s] 15m candles: %d | 1h candles: %d\n",
+				s.adapter.Asset(), len(c15), len(c1h))
+		}
+	}
 }
