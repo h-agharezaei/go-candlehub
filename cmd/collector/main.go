@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-    log.Println("🕯️ CandleHub Collector started")
+    log.Println("CandleHub Collector started")
 
     goldAdapter := yahoo.NewGoldAdapter()
     sched := scheduler.NewScheduler(goldAdapter)
